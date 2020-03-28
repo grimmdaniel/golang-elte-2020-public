@@ -1,3 +1,4 @@
+
 // Binary watch tracks changes in a directory structure.
 package main
 
@@ -9,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+	"sync"
 )
 
 func main() {
@@ -74,10 +76,21 @@ func CompareFileSets(before, after FileSet) (added, edited, deleted []string) {
 }
 
 func HashAll() FileSet {
-	// TODO: parallelize the checksum calculation
+	ch := make(chan struct{})
+	mu := sync.Mutex{}
 	results := make(FileSet)
-	for _, path := range Files() {
-		results[path] = Hash(path)
+	files := Files()
+	for _, path := range files {
+		go func(path string) {
+			mu.Lock()
+			results[path] = Hash(path)
+			mu.Unlock()
+			ch <- struct{}{}
+		}(path)
+	}
+	
+	for range files {
+		<-ch
 	}
 	// END OMIT
 	return results
